@@ -11,7 +11,7 @@ var (
 
 func TestFileExists(t *testing.T) {
 	for _, f := range existsFiles {
-		exists := fileExists(f)
+		exists := FileExists(f)
 		if !exists {
 			t.Errorf("expect to find %s got %v", f, exists)
 		}
@@ -19,7 +19,7 @@ func TestFileExists(t *testing.T) {
 	}
 
 	for _, f := range notExistFiles {
-		exists := fileExists(f)
+		exists := FileExists(f)
 		if exists {
 			t.Errorf("expect not to find %s got %v", f, exists)
 		}
