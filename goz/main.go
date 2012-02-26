@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"errors"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -9,37 +10,95 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"unix"
 )
 
 const (
-	EXT = ".goz"
+	EXT             = ".goz"
+	BINFMT_NAME     = "GOZ"
+	BINFMT_DIR      = "/proc/sys/fs/binfmt_misc"
+	BINFMT_REGISTER = "/proc/sys/fs/binfmt_misc/register"
+	BINFMT_REGFILE  = "/proc/sys/fs/binfmt_misc/GOZ"
+	BINFMT_REGFMT   = `:GOZ:M::\x1f\x8b::/home/strings/gocode/bin/goz:`
 )
 
 var (
+	// flags
 	fdebug   = flag.Bool("d", false, "output debugging details")
 	fverbose = flag.Bool("v", false, "verbose")
 	usage    = `Usage: goz command [arguements]
 `
-	GOPATH   = os.Getenv("GOPATH")
-	vlog     = log.New(os.Stdout, "goz: ", 0)
+	fpath    = flag.String("path", os.Getenv("GOPATH")+"/bin", "path to compress binaries")
+
+	vlog = log.New(os.Stdout, "goz: ", 0)
+
+	// errors
+	NotRootRegisterError = errors.New("you must be root to register with binfmt")
 )
 
 func main() {
 	flag.Parse()
-	cmd, args := poparg(flag.Args())
+	cmd := flag.Arg(0)
 	switch cmd {
 	case "run":
-		checkArgs(run, args)
+		check(run)
 	case "compress":
 		check(compress)
+	case "register":
+		check(register)
+	case "unregister":
+		check(unregister)
 	default:
-		checkArgs(run, args)
+		err := interp(cmd)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
+func register() (err error) {
+	if os.Getuid() != 0 {
+		return NotRootRegisterError
+	}
+	if isBinFmtRegistered() {
+		info(BINFMT_NAME, "is already registered ")
+		return nil
+	}
+	fd, err := os.OpenFile(BINFMT_REGISTER, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	if _, err = fd.WriteString(BINFMT_REGFMT); err != nil {
+		return err
+	}
+	info("Registered", BINFMT_NAME, "with binfmt")
+	return nil
+}
+
+func unregister() (err error) {
+	if os.Getuid() != 0 {
+		return NotRootRegisterError
+	}
+	fd, err := os.OpenFile(BINFMT_REGFILE, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	if _, err = fd.WriteString("-1"); err != nil {
+		return err
+	}
+	info("Unregisterd", BINFMT_NAME, "with binfmt")
+	return nil
+}
+
+func isBinFmtRegistered() bool {
+	return unix.FileExists(BINFMT_REGFILE)
+}
+
 func compress() (err error) {
-	glob := filepath.Join(GOPATH, "bin", "*") // $GOPATH/bin/*
-	info("compressing binaries in", filepath.Dir(glob))
+	glob := filepath.Join(*fpath, "*") // $GOPATH/bin/*
+	info("Compressing binaries in", filepath.Dir(glob))
 	files, err := filepath.Glob(glob)
 	if err != nil {
 		return err
@@ -58,7 +117,7 @@ func compress() (err error) {
 			return err
 		}
 		defer fd.Close()
-		gzfd, err := os.Create(filepath.Join(GOPATH, "bin", filepath.Base(f)+EXT))
+		gzfd, err := os.Create(filepath.Join(*fpath, filepath.Base(f)+EXT))
 		if err != nil {
 			return err
 		}
@@ -75,20 +134,25 @@ func compress() (err error) {
 		if err != nil {
 			return err
 		}
-		infof("compressed %-8.8s %v", filepath.Base(f), nfi.Size())
+		gzfd.Chmod(os.FileMode(0755))
+		infof("Compressed %-8.8s %v", filepath.Base(f), nfi.Size())
 	}
 	return
 }
 
-func run(args []string) (err error) {
-	gozpath := filepath.Join(GOPATH, "bin", args[0]+EXT)
-	info("running", args)
+func run() (err error) {
+	info("would run here")
+	return nil
+}
+
+func interp(path string) (err error) {
+	info("Running", path, flag.Args()[1:])
 	dir, err := ioutil.TempDir("", "goz-")
 	if err != nil {
 		return err
 	}
 	defer func() {
-		info("cleaning", dir)
+		info("Cleaning", dir)
 		err := os.RemoveAll(dir)
 		if err != nil {
 			vlog.Fatal(err)
@@ -99,7 +163,7 @@ func run(args []string) (err error) {
 		return err
 	}
 	defer fd.Close()
-	gzfd, err := os.Open(gozpath)
+	gzfd, err := os.Open(path)
 	if err != nil {
 		return err
 	}
@@ -117,7 +181,7 @@ func run(args []string) (err error) {
 		return err
 	}
 	fd.Close()
-	cmd := exec.Command(fd.Name(), args[1:]...)
+	cmd := exec.Command(fd.Name(), flag.Args()[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -141,12 +205,6 @@ func poparg(a []string) (string, []string) {
 func check(fn func() error) {
 	if err := fn(); err != nil {
 		log.Fatal(err)
-	}
-}
-
-func checkArgs(fn func([]string) error, args []string) {
-	if err := fn(args); err != nil {
-		vlog.Fatal(err)
 	}
 }
 
