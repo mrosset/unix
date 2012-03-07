@@ -48,6 +48,7 @@ func copy(org string, dest string) (err error) {
 	msg := fmt.Sprintf("cp: %s", path.Base(org))
 	pb := console.NewProgressBarWriter(msg, st.Size(), dd)
 	_, err = io.Copy(pb, od)
+	fmt.Println()
 	if err != nil {
 		return err
 	}
