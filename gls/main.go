@@ -13,6 +13,7 @@ import (
 var (
 	timeFmt = "Jan _2 15:04"
 	long    = flag.Bool("l", false, "use long listing format")
+	all     = flag.Bool("a", false, "do not ignore entries staring with .")
 )
 
 func main() {
@@ -54,6 +55,9 @@ func ls(args []string) (err error) {
 
 func list(files []os.FileInfo) (err error) {
 	for _, f := range files {
+		if f.Name()[0] == '.' && !*all {
+			continue
+		}
 		if !*long {
 			fmt.Printf("%s ", f.Name())
 			continue
