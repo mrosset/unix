@@ -3,18 +3,39 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/str1ngs/util/console"
 	"log"
 	"os"
 	"os/user"
+	"path"
+	"strings"
 	"syscall"
+	"util/console"
+	"util/human"
+)
+
+const (
+	escape  = "\x1b[00;0;%vm%s\x1b[m"
+	timeFmt = "Jan _2 15:04"
 )
 
 var (
-	timeFmt = "Jan _2 15:04"
-	long    = flag.Bool("l", false, "use long listing format")
-	all     = flag.Bool("a", false, "do not ignore entries staring with .")
+	// flags
+	long = flag.Bool("l", false, "use long listing format")
+	all  = flag.Bool("a", false, "do not ignore entries staring with .")
+
+	// color
+	ls_colors = os.Getenv("LS_COLORS")
+	colors    = map[string]string{}
 )
+
+func init() {
+	for _, j := range strings.Split(ls_colors, ":") {
+		kv := strings.Split(j, "=")
+		if len(kv) == 2 {
+			colors[kv[0]] = kv[1]
+		}
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -73,9 +94,10 @@ func list(files []os.FileInfo) (err error) {
 				stat.Nlink,
 				user.Username,
 				user.Gid,
-				f.Size(),
+				//f.Size(),
+				human.ByteSize(f.Size()),
 				f.ModTime().Format(timeFmt),
-				f.Name(),
+				getColor(f),
 			)
 		}
 	}
@@ -84,4 +106,17 @@ func list(files []os.FileInfo) (err error) {
 		fmt.Println()
 	}
 	return
+}
+
+func getColor(fi os.FileInfo) string {
+	key := fmt.Sprintf("*%s", path.Ext(fi.Name()))
+	switch {
+	case fi.Mode()&os.ModeDir != 0:
+		key = "di"
+	case fi.Mode()&os.ModeSymlink != 0:
+		key = "ln"
+	case colors[key] == "":
+		return fi.Name()
+	}
+	return fmt.Sprintf(escape, colors[key], fi.Name())
 }
