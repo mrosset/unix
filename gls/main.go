@@ -3,61 +3,76 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/str1ngs/util/console"
+	"log"
 	"os"
 	"os/user"
 	"syscall"
-	"github.com/str1ngs/util/console"
 )
 
 var (
-	longFmt = "%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
 	timeFmt = "Jan _2 15:04"
 	long    = flag.Bool("l", false, "use long listing format")
 )
 
 func main() {
 	flag.Parse()
-	path := ""
-	switch flag.NArg() {
-	case 0:
-		path = "."
-	default:
-		path = flag.Arg(0)
+	args := flag.Args()
+	if flag.NArg() == 0 {
+		args = []string{"."}
 	}
-	ls(path)
+	err := ls(args)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func ls(path string) (err error) {
-	fd, err := os.Open(path)
-	if err != nil {
-		return
+func ls(args []string) (err error) {
+	files := []os.FileInfo{}
+	for _, a := range args {
+		fi, err := os.Stat(a)
+		if err != nil {
+			return err
+		}
+		if !fi.IsDir() {
+			files = append(files, fi)
+			continue
+		}
+		fd, err := os.Open(a)
+		if err != nil {
+			return err
+		}
+		fis, err := fd.Readdir(0)
+		if err != nil {
+			return err
+		}
+		fd.Close()
+		files = append(files, fis...)
 	}
-	defer fd.Close()
-	fis, err := fd.Readdir(0)
-	if err != nil {
-		return
-	}
-	for _, f := range fis {
+	return list(files)
+}
+
+func list(files []os.FileInfo) (err error) {
+	for _, f := range files {
 		if !*long {
 			fmt.Printf("%s ", f.Name())
 			continue
 		}
 		stat := f.Sys().(*syscall.Stat_t)
-		var (
-			mode  = fmt.Sprintf("%v", f.Mode())
-			nlink = fmt.Sprintf("%v", stat.Nlink)
-			uid   = fmt.Sprintf("%v", stat.Uid)
-			//gid   = fmt.Sprintf("%v", stat.Gid)
-			size  = fmt.Sprintf("%v", f.Size())
-			time  = f.ModTime().Format(timeFmt)
-			name  = f.Name()
-		)
-		user, err := user.LookupId(uid)
+		user, err := user.LookupId(fmt.Sprintf("%v", stat.Uid))
 		if err != nil {
 			return err
 		}
 		if *long {
-			console.Println(mode, nlink, user.Username, user.Gid, size, time, name)
+			console.Println(
+				f.Mode(),
+				stat.Nlink,
+				user.Username,
+				user.Gid,
+				f.Size(),
+				f.ModTime().Format(timeFmt),
+				f.Name(),
+			)
 		}
 	}
 	console.Flush()
