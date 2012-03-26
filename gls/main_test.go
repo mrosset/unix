@@ -7,6 +7,6 @@ import (
 
 func TestMain(t *testing.T) {
 	*long = true
-	os.Args = append(os.Args, "/home/strings/", ".")
+	os.Args = append(os.Args, "/home/strings/tmp", ".")
 	main()
 }

@@ -80,7 +80,7 @@ func list(files []os.FileInfo) (err error) {
 			continue
 		}
 		if !*long {
-			fmt.Printf("%s ", f.Name())
+			fmt.Printf("%s ", getColor(f))
 			continue
 		}
 		stat := f.Sys().(*syscall.Stat_t)
@@ -94,7 +94,6 @@ func list(files []os.FileInfo) (err error) {
 				stat.Nlink,
 				user.Username,
 				user.Gid,
-				//f.Size(),
 				human.ByteSize(f.Size()),
 				f.ModTime().Format(timeFmt),
 				getColor(f),
