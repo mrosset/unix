@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/user"
 	"path"
 	"strings"
 	"syscall"
@@ -84,7 +83,6 @@ func list(files []os.FileInfo) (err error) {
 			continue
 		}
 		stat := f.Sys().(*syscall.Stat_t)
-		user, err := user.LookupId(fmt.Sprintf("%v", stat.Uid))
 		if err != nil {
 			return err
 		}
@@ -92,8 +90,8 @@ func list(files []os.FileInfo) (err error) {
 			console.Println(
 				f.Mode(),
 				stat.Nlink,
-				user.Username,
-				user.Gid,
+				stat.Uid,
+				stat.Gid,
 				human.ByteSize(f.Size()),
 				f.ModTime().Format(timeFmt),
 				getColor(f),
@@ -114,6 +112,8 @@ func getColor(fi os.FileInfo) string {
 		key = "di"
 	case fi.Mode()&os.ModeSymlink != 0:
 		key = "ln"
+	case fi.Mode()&os.ModePerm == 0755:
+		key = "ex"
 	case colors[key] == "":
 		return fi.Name()
 	}
