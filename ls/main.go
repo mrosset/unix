@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 	"syscall"
-	"util/console"
-	"util/human"
+	"github.com/str1ngs/util/console"
+	"github.com/str1ngs/util/human"
 )
 
 const (
